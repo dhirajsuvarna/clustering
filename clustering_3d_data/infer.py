@@ -5,6 +5,8 @@ from model.model import PCAutoEncoder
 from model.model_fxia22 import PointNetAE
 import open3d as o3d
 import numpy as np
+from sklearn.externals import joblib 
+from sklearn import cluster
 
 parser = argparse.ArgumentParser()
 
@@ -12,6 +14,7 @@ parser.add_argument("--input_folder", required=True, help="Single 3d model or in
 parser.add_argument("--nn_model", required=True, help="Trained Neural Network Model")
 parser.add_argument("--nn_model_type", required=True, choices=['fxia', 'dhiraj'], help="Model Type")
 parser.add_argument("--out_norm_input", action="store_true", help="Output normalized version of input file")
+parser.add_argument("--classifier_model", required=True, help="Path to the Classifier Model")
 
 ip_options = parser.parse_args()
 input_folder = ip_options.input_folder
@@ -23,6 +26,7 @@ device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cp
 point_dim = 3
 num_points = 2048
 
+# Load Autoencoder Model
 if ip_options.nn_model_type == 'dhiraj':
     autoencoder = PCAutoEncoder(point_dim, num_points)
 elif ip_options.nn_model_type == 'fxia':
@@ -30,6 +34,9 @@ elif ip_options.nn_model_type == 'fxia':
 
 state_dict = torch.load(ip_options.nn_model, map_location=device)
 autoencoder.load_state_dict(state_dict)
+
+# Load Classifer Model
+kmeans = joblib.load(ip_options.classifier_model)
 
 def save_as_pcd(iFileName, iPoints, iColor=None):
     # Create pcd file of the reconstructed points
@@ -73,8 +80,11 @@ def infer_model_file(input_file, autoencoder):
     points = points.transpose(2, 1)
     #points = points.cuda() #uncomment this if running on GPU
     autoencoder = autoencoder.eval()
-    reconstructed_points, global_feat = autoencoder(points)
-    #reconstructed_points = autoencoder(points)
+    reconstructed_points, latent_vector = autoencoder(points)
+    
+    # classify
+    cluster_id = kmeans.predict(latent_vector)
+    print(f"Predicted Cluster ID : {cluster_id}")
 
     #Reshape 
     reconstructed_points = reconstructed_points.squeeze().transpose(0,1)
