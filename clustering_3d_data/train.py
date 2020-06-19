@@ -12,6 +12,7 @@ from torch.utils.tensorboard import SummaryWriter
 import numpy as np
 from util import pointutil
 import clustering
+import runmanager
 
 if torch.cuda.is_available():
     from chamfer_distance.chamfer_distance_gpu import ChamferDistance # https://github.com/chrdiller/pyTorchChamferDistance
@@ -26,8 +27,24 @@ def trimfilenames(iFileName):
     trimPath = os.sep.join(pathComps)
     return trimPath
 
-
 #########################################################################
+
+def create_network(iModelType, iNumPoints, iModelPath = ''):
+    point_dim = 3
+    if iModelType == 'dhiraj':
+        autoencoder = PCAutoEncoder(point_dim, iNumPoints)
+    elif iModelType == 'fxia':
+        autoencoder = PointNetAE(iNumPoints)
+
+    if iModelPath != '':
+        autoencoder.load_state_dict(torch.load(ip_options.load_saved_model))
+
+    # It is recommented to move the model to GPU before constructing optimizers for it. 
+    # This link discusses this point in detail - https://discuss.pytorch.org/t/effect-of-calling-model-cuda-after-constructing-an-optimizer/15165/8
+    # Moving the Network model to GPU
+    autoencoder.to(device)
+    return autoencoder
+
 
 parser = argparse.ArgumentParser()
 
@@ -55,6 +72,8 @@ torch.manual_seed(manualSeed) #later:
 
 # Create instance of SummaryWriter 
 writer = SummaryWriter('runs/' + ip_options.model_type)
+# create folder for trained models to be saved
+os.makedirs('saved_models', exist_ok=True)
 
 # determine the device to run the network on
 device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
@@ -71,51 +90,21 @@ if not ip_options.only_clustering:
     # Output of the dataloader is a tensor reprsenting
     # [batch_size, num_channels, height, width]
 
-    # getting one data sample
-    sample, files = next(iter(train_ds))
-
     # Creating Model
-    num_points = ip_options.num_points
-    point_dim = 3
-
-    if ip_options.model_type == 'dhiraj':
-        autoencoder = PCAutoEncoder(point_dim, num_points)
-    elif ip_options.model_type == 'fxia':
-        autoencoder = PointNetAE(num_points)
-
-    if ip_options.load_saved_model != '':
-        autoencoder.load_state_dict(torch.load(ip_options.load_saved_model))
-
-    #writer.add_graph(autoencoder, torch.tensor([28, 28]))
-
-    # iterating the weights for each layer 
-    for name, param in autoencoder.named_parameters():
-        print(f"{name}:\t\t{param.shape}")
-
-    # It is recommented to move the model to GPU before constructing optimizers for it. 
-    # This link discusses this point in detail - https://discuss.pytorch.org/t/effect-of-calling-model-cuda-after-constructing-an-optimizer/15165/8
-    # Moving the Network model to GPU
-    autoencoder.to(device)
-
+    autoencoder = create_network(ip_options.model_type, ip_options.num_points, ip_options.load_saved_model)
 
     # Setting up Optimizer - https://pytorch.org/docs/stable/optim.html 
     optimizer = optim.Adam(autoencoder.parameters(), lr=0.001, betas=(0.9, 0.999))
     scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.5)
 
-    # create folder for trained models to be saved
-    os.makedirs('saved_models', exist_ok=True)
-
     # create instance of Chamfer Distance Loss Instance
     chamfer_dist = ChamferDistance()
 
-    # Start the Training 
-    best_loss = 1e20
-    best_latent_vector = torch.Tensor().to(device)
-    best_filenames = list()
-    best_epoch = -1
+    ##########################################################################################
+    # START TRAINING OF THE NETWORK
+    m = runmanager.RunManager(autoencoder, train_dl, writer)
     for epoch in range(int(ip_options.start_epoch_from), ip_options.nepoch):
-        latent_vector_all = torch.Tensor().to(device)
-        filename_all = list()
+        m.begin_epoch()
         for i, data in enumerate(train_dl):
             points = data[0]
             filenames = list(data[1])
@@ -127,58 +116,51 @@ if not ip_options.only_clustering:
             optimizer.zero_grad()   # Reseting the gradients
 
             reconstructed_points, latent_vector = autoencoder(points) # perform training
-            latent_vector_all = torch.cat((latent_vector_all, latent_vector), 0) 
-            filename_all.extend(filenames)
 
             points = points.transpose(1,2)
             reconstructed_points = reconstructed_points.transpose(1,2)
             dist1, dist2 = chamfer_dist(points, reconstructed_points)   # calculate loss
             train_loss = (torch.mean(dist1)) + (torch.mean(dist2))
 
-            print(f"Epoch: {epoch}, Iteration#: {i}, Train Loss: {train_loss}")
+            print(f"Epoch: {epoch}, Iteration: {i}, Loss: {train_loss}")
             
             train_loss.backward() # Calculate the gradients using Back Propogation
 
             optimizer.step() # Update the weights and biases 
-            train_loss += train_loss
 
-            # add tensorboard logging
-            # for name, param in autoencoder.named_parameters():
-            #     writer.add_histogram(name + "_grad", param.grad, i)
-
-        epoch_loss = train_loss / (len(train_ds)/ip_options.batch_size)
-        print(f"Mean Training Loss (per epoch) : {epoch_loss}")
+            m.track_loss(train_loss)
 
         scheduler.step()
+        m.end_epoch()
 
-        # save model with the best loss
-        if epoch_loss < best_loss:  
-            best_loss = epoch_loss
-            best_latent_vector = latent_vector_all
-            best_filenames = filename_all
-            best_epoch = epoch
-            torch.save(autoencoder.state_dict(), 'saved_models/autoencoder_%d.pth' % (epoch))
+    ##########################################################################################
+    # find the best performing epoch and run the network to get latent vectors
+    with torch.no_grad():
+        best_latent_vector = torch.Tensor().to(device)
+        best_filenames = list()
+        autoencoder_eval = create_network(ip_options.model_type, ip_options.num_points)
+        state_dict = torch.load('saved_models/network_%d.pth' %m.best_epoch_id, map_location=device)
+        autoencoder_eval.load_state_dict(state_dict)
+        autoencoder_eval.eval() # set the network in evaluation mode
+        for itrid, data in enumerate(train_dl):
+            filenames = list(data[1])
 
+            points = data[0]
+            points = points.transpose(2, 1)        
+            points = points.to(device)
 
-        # Tensorboard logging 
-        # 1. graph of loss function 
-        writer.add_scalar('Training Loss', epoch_loss, epoch)   
+            reconstructed_points, latent_vector = autoencoder_eval(points) # perform training
+            best_latent_vector = torch.cat((best_latent_vector, latent_vector), 0) 
+            best_filenames.extend(filenames)
 
-        # 2. add historgram for weights and biases
-        for name, param in autoencoder.named_parameters():
-            if('bn' not in name and 'stn' not in name):
-                writer.add_histogram(name, param, epoch)
-                if param.grad is not None:
-                    writer.add_histogram(name + "_grad", param.grad, epoch)
+        # add embedding for t-sne visualiztion
+        trimmedFiles = list(map(trimfilenames, best_filenames))
+        writer.add_embedding(best_latent_vector, metadata=trimmedFiles, global_step=m.best_epoch_id, tag="Latent_Vectors")
 
-    # add embedding for t-sne visualiztion
-    trimmedFiles = list(map(trimfilenames, best_filenames))
-    writer.add_embedding(best_latent_vector, metadata=trimmedFiles, global_step=best_epoch, tag="Latent_Vectors")
-
-    # serialize the best latent vector
-    torch.save(best_latent_vector.detach(), 'saved_models/best_latent_vector_%d.pth' %best_epoch)
-    torch.save(best_filenames, 'saved_models/best_filenames_%d.pth' %best_epoch)
-    best_latent_vector = best_latent_vector.detach().numpy()
+        # serialize the best latent vector
+        torch.save(best_latent_vector.detach(), 'saved_models/best_latent_vector_%d.pth' %m.best_epoch_id)
+        torch.save(best_filenames, 'saved_models/best_filenames_%d.pth' %m.best_epoch_id)
+        best_latent_vector = best_latent_vector.detach().numpy()
 else: 
     best_latent_vector = ip_options.latent_vector
     best_filenames = ip_options.filenames
@@ -187,16 +169,8 @@ else:
     best_filenames = torch.load(best_filenames)
 
 #######################################################
-# Perform clustering 
-# from sklearn import cluster
-# # K-Means
+# PERFORM CLUSTERING 
 n_clusters = 2
-# kmeans = cluster.KMeans(init='k-means++', n_clusters=n_clusters, n_init=10).fit(best_latent_vector)
-# print(f"# KMeans Clusters : {np.unique(kmeans.labels_)}")
-
-# # save the clustering algo
-# from sklearn.externals import joblib 
-# joblib.dump(kmeans, "saved_models/kmeans_model.pkl")
 clusteringAlgo = clustering.get_clusteringAlgo("kmeans")
 clusteringAlgo.performClustering(best_latent_vector, n_clusters)
 clusteringAlgo.save()
