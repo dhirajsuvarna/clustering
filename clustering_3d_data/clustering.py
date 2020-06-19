@@ -1,51 +1,72 @@
 
 # Perform clustering
 
-# latent_point = latent_vector[1].detach().numpy()
-# filename_map = dict()
-# filename_map.update({'filename' : latent_point})
-# torch.save(filename_map, 'test.pth')
-# load_file_map = torch.load('test.pth')
-
 from sklearn import cluster
-import torch
-import numpy as np
-import timeit
+from sklearn.externals import joblib
+import os
 
-latent_vector_file = 'saved_models/best_latent_vector_1.pth'
+# Achieving Abstract Classes and Methods
+# https://stackoverflow.com/questions/44576167/force-child-class-to-override-parents-methods/44576235
 
-# Load the clusters
-latent_vector = torch.load(latent_vector_file).detach()
+def get_clusteringAlgo(iAlgo):
+    clusteringAlgo = None 
+    if iAlgo == "meanshift":
+        clusteringAlgo = MeanShift()
+    elif iAlgo == "dbscan":
+        clusteringAlgo = DBScan()
+    elif iAlgo == "kmeans":
+        clusteringAlgo = KMeans()
+    else:
+        ValueError(iAlgo)
+    
+    return clusteringAlgo
+        
 
-# Train K-Means
-n_clusters = 2
-kmeans = cluster.KMeans(init='k-means++', n_clusters=n_clusters, n_init=10).fit(latent_vector)
+DEFAULT_PATH = 'saved_models'
 
-print(f"#KMeans Clusters : {np.unique(kmeans.labels_)}")
-# print(f"Clusters : {kmeans.labels_}")
-# print(f"KMeans Cluster Centroids : {kmeans.cluster_centers_}")
+class BaseCluster:
+    def __init__(self, name):
+        self.name = name
+        self.algo = None
+    
+    def performClustering(self, iData):
+        raise NotImplementedError
 
-###################################################################################################
-# Train Mean Shift 
-bandwidth = cluster.estimate_bandwidth(latent_vector)
-meanshift = cluster.MeanShift(bandwidth=bandwidth).fit(latent_vector)
-print(f"#MeanShift Clusters : {np.unique(meanshift.labels_)}")
-# print(f"Clusters : {meanshift.labels_}")
-# print(f"MeanShift Cluster Centroids : {meanshift.cluster_centers_}")
+    def save(self, iDir = None):
+        iDir = DEFAULT_PATH if iDir is None else iDir
+        filePath = os.path.join(iDir, self.name + '.pkl')
+        joblib.dump(self.algo, filePath)
 
-# to do - bin_seeding = True && estimate_bandwidth with quantile = 0.3
+class MeanShift(BaseCluster):
+    def __init__(self):
+        super().__init__("MeanShift")
 
-###################################################################################################
-# Affinity Propogation 
-affinity = cluster.AffinityPropagation(preference=-750).fit(latent_vector)
-print(f"#Affinity Clusters : {np.unique(affinity.labels_)}")
-# print(f"Clusters : {affinity.labels_}")
-# print(f"Affinity Cluster Centroids : {affinity.cluster_centers_}")
+    def performClustering(self, iData):
+        bandwidth = cluster.estimate_bandwidth(iData)
+        self.algo = cluster.MeanShift(bandwidth=bandwidth).fit(iData)
+
+class DBScan(BaseCluster):        
+    def __init__(self):
+        super().__init__("DBScan")
+
+    def performClustering(self, iData):
+        self.algo = cluster.DBSCAN(eps=1.0, min_samples=10).fit(iData)
+
+class KMeans(BaseCluster):
+    def __init__(self):
+        super().__init__("KMeans")
+
+    def performClustering(self, iData, iNumCluster):
+        self.algo = cluster.KMeans(init='k-means++', n_clusters=iNumCluster, n_init=10).fit(iData)
 
 
-###################################################################################################
-# DBSCAN 
-db = cluster.DBSCAN(eps=1.0, min_samples=10).fit(latent_vector)
-print(f"#DBSCAN Clusters : {np.unique(db.labels_)}")
-# print(f"Clusters : {db.labels_}")
-# print(f"DBSCAN Cluster Centroids : {db.cluster_centers_}")
+
+#Test code 
+import torch 
+if __name__ == "__main__":
+    algo = "dbscan"
+
+    algo = get_clusteringAlgo(algo)
+
+    data = torch.Tensor()
+    algo.performClustering(data)
