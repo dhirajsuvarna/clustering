@@ -170,9 +170,10 @@ else:
 
 #######################################################
 # PERFORM CLUSTERING 
+print("Performing Clustering...")
 n_clusters = 2
-clusteringAlgo = clustering.get_clusteringAlgo("kmeans")
-clusteringAlgo.performClustering(best_latent_vector, n_clusters)
+clusteringAlgo = clustering.get_clusteringAlgo("dbscan")
+clusteringAlgo.performClustering(best_latent_vector)
 clusteringAlgo.save()
 
 cluster_map = dict() # create a map of cluster id and filenames 
