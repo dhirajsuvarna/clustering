@@ -10,6 +10,8 @@ from model.model import PCAutoEncoder
 from model.model_fxia22 import PointNetAE
 from torch.utils.tensorboard import SummaryWriter
 import numpy as np
+from util import pointutil
+import clustering
 
 if torch.cuda.is_available():
     from chamfer_distance.chamfer_distance_gpu import ChamferDistance # https://github.com/chrdiller/pyTorchChamferDistance
@@ -186,18 +188,21 @@ else:
 
 #######################################################
 # Perform clustering 
-from sklearn import cluster
-# K-Means
+# from sklearn import cluster
+# # K-Means
 n_clusters = 2
-kmeans = cluster.KMeans(init='k-means++', n_clusters=n_clusters, n_init=10).fit(best_latent_vector)
-print(f"# KMeans Clusters : {np.unique(kmeans.labels_)}")
+# kmeans = cluster.KMeans(init='k-means++', n_clusters=n_clusters, n_init=10).fit(best_latent_vector)
+# print(f"# KMeans Clusters : {np.unique(kmeans.labels_)}")
 
-# save the clustering algo
-from sklearn.externals import joblib 
-joblib.dump(kmeans, "saved_models/kmeans_model.pkl")
+# # save the clustering algo
+# from sklearn.externals import joblib 
+# joblib.dump(kmeans, "saved_models/kmeans_model.pkl")
+clusteringAlgo = clustering.get_clusteringAlgo("kmeans")
+clusteringAlgo.performClustering(best_latent_vector, n_clusters)
+clusteringAlgo.save()
 
 cluster_map = dict() # create a map of cluster id and filenames 
-for index, label in enumerate(kmeans.labels_):
+for index, label in enumerate(clusteringAlgo.algo.labels_):
     cluster_map.setdefault(label, []).append(best_filenames[index])
 
 import open3d as o3d
@@ -209,11 +214,8 @@ for k, v in cluster_map.items():
         pointCloud = o3d.io.read_point_cloud(filepath)
         points = np.asarray(pointCloud.points)
 
-        choice = np.random.choice(len(points), ip_options.num_points, replace=True)
-        points = points[choice, :]
-        points = points - np.expand_dims(np.mean(points, axis = 0), 0) # center
-        dist = np.max(np.sqrt(np.sum(points ** 2, axis = 1)),0)
-        points = points / dist #scale
+        points = pointutil.random_n_points(points, ip_options.num_points)
+        points = pointutil.normalize(points)
 
         colors = np.full(points.shape, color)
         points = torch.as_tensor(points)#.unsqueeze(0)

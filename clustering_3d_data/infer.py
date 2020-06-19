@@ -7,6 +7,7 @@ import open3d as o3d
 import numpy as np
 from sklearn.externals import joblib 
 from sklearn import cluster
+from util import pointutil
 
 parser = argparse.ArgumentParser()
 
@@ -63,13 +64,10 @@ def infer_model_file(input_file, autoencoder):
     points = np.array(cloud.points)
 
     # extract only "N" number of point from the Point Cloud
-    choice = np.random.choice(len(points), num_points, replace=True)
-    points = points[choice, :]
+    points = pointutil.random_n_points(points, num_points)
 
     # Normalize and center and bring it to unit sphere
-    points = points - np.expand_dims(np.mean(points, axis = 0), 0) # center
-    dist = np.max(np.sqrt(np.sum(points ** 2, axis = 1)),0)
-    points = points / dist #scale
+    points = pointutil.normalize(points)
 
     if ip_options.out_norm_input:
         norm_ip_file = get_path_without_ext(input_file) + "_norm.pcd"
@@ -78,7 +76,7 @@ def infer_model_file(input_file, autoencoder):
     points = torch.from_numpy(points).float()
     points = torch.unsqueeze(points, 0) #done to introduce batch_size of 1 
     points = points.transpose(2, 1)
-    #points = points.cuda() #uncomment this if running on GPU
+    # points = points.cuda() #uncomment this if running on GPU
     autoencoder = autoencoder.eval()
     reconstructed_points, latent_vector = autoencoder(points)
     
@@ -111,6 +109,3 @@ with torch.no_grad():
         infer_models_folder(input_folder, autoencoder)
     elif os.path.isfile(input_folder):
         infer_model_file(input_folder, autoencoder)
-
-
-
