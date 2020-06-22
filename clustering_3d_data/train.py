@@ -181,6 +181,7 @@ clusteringAlgo.save()
 
 cluster_map = dict() # create a map of cluster id and filenames 
 for index, label in enumerate(clusteringAlgo.algo.labels_):
+    label = "Cluster-" + str(label)
     cluster_map.setdefault(label, []).append(best_filenames[index])
 
 with open("clustering.json", 'w') as clusterout:
