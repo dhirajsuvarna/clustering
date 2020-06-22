@@ -102,6 +102,7 @@ if not ip_options.only_clustering:
 
     ##########################################################################################
     # START TRAINING OF THE NETWORK
+    print("Start Training")
     m = runmanager.RunManager(autoencoder, train_dl, writer)
     for epoch in range(int(ip_options.start_epoch_from), ip_options.nepoch):
         m.begin_epoch()
@@ -135,6 +136,7 @@ if not ip_options.only_clustering:
 
     ##########################################################################################
     # find the best performing epoch and run the network to get latent vectors
+    print("Generate the Best Latent Vectors")
     with torch.no_grad():
         best_latent_vector = torch.Tensor().to(device)
         best_filenames = list()
@@ -160,7 +162,7 @@ if not ip_options.only_clustering:
         # serialize the best latent vector
         torch.save(best_latent_vector.detach(), 'saved_models/best_latent_vector_%d.pth' %m.best_epoch_id)
         torch.save(best_filenames, 'saved_models/best_filenames_%d.pth' %m.best_epoch_id)
-        best_latent_vector = best_latent_vector.detach().numpy()
+        best_latent_vector = best_latent_vector.cpu().data.detach().numpy()
 else: 
     best_latent_vector = ip_options.latent_vector
     best_filenames = ip_options.filenames
@@ -180,6 +182,10 @@ cluster_map = dict() # create a map of cluster id and filenames
 for index, label in enumerate(clusteringAlgo.algo.labels_):
     cluster_map.setdefault(label, []).append(best_filenames[index])
 
+print("Clusters:")
+print(cluster_map)
+
+print("Writing to Tensorboard")
 import open3d as o3d
 color = (0, 0, 0)
 for k, v in cluster_map.items():
