@@ -146,6 +146,7 @@ if not ip_options.only_clustering:
         autoencoder_eval.load_state_dict(state_dict)
         autoencoder_eval.eval() # set the network in evaluation mode
         for itrid, data in enumerate(train_dl):
+            print(f"Evaluating Batch: {itrid}")
             filenames = list(data[1])
 
             points = data[0]
