@@ -13,6 +13,7 @@ import numpy as np
 from util import pointutil
 import clustering
 import runmanager
+import json
 
 if torch.cuda.is_available():
     from chamfer_distance.chamfer_distance_gpu import ChamferDistance # https://github.com/chrdiller/pyTorchChamferDistance
@@ -182,8 +183,10 @@ cluster_map = dict() # create a map of cluster id and filenames
 for index, label in enumerate(clusteringAlgo.algo.labels_):
     cluster_map.setdefault(label, []).append(best_filenames[index])
 
-print("Clusters:")
-print(cluster_map)
+with open("clustering.json", 'w') as clusterout:
+    json.dump(cluster_map, clusterout)
+    print("Clusters file generated")
+
 
 print("Writing to Tensorboard")
 import open3d as o3d
