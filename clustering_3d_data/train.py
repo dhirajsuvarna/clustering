@@ -60,6 +60,7 @@ parser.add_argument("--model_type", required=True, choices=['dhiraj', 'fxia'], h
 parser.add_argument("--only_clustering", action="store_true", help="Perform only Clustering")
 parser.add_argument("--latent_vector", required=True, default="", help="Path to saved latent vector")
 parser.add_argument("--filenames", required=True, default="", help="Path to saved filenames vector")
+#parser.add_argument("--clutering_algo", required=True, choices=['dbscan', 'meanshift'], help="Algorithms for clustering")
 
 
 ip_options = parser.parse_args()
@@ -185,7 +186,7 @@ for index, label in enumerate(clusteringAlgo.algo.labels_):
     label = "Cluster-" + str(label)
     cluster_map.setdefault(label, []).append(best_filenames[index])
 
-with open("clustering.json", 'w') as clusterout:
+with open("saved_models/clustering.json", 'w') as clusterout:
     json.dump(cluster_map, clusterout)
     print("Clusters file generated")
 
