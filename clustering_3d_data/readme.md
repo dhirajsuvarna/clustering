@@ -1,4 +1,4 @@
-[Clustering on Shapenet Data](https://github.com/dhirajsuvarna/clustering/tree/master/clustering_3d_data/images/shapenet_tsne.png)
+[Clustering on Shapenet Data](https://github.com/dhirajsuvarna/clustering/tree/master/clustering_3d_data/images/shapenet_tsne.png?raw=true)
 
 
 ### CLUSTERING - WHAT TO DO NEXT?
