@@ -1,6 +1,6 @@
 """
 model copied from Fxia22
-
+https://github.com/fxia22/pointGAN/blob/74b6c432c5eaa1e0a833e755f450df2ee2c5488e/pointnet.py#L135 
 """
 
 import torch

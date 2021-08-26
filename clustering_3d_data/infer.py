@@ -109,3 +109,4 @@ with torch.no_grad():
         infer_models_folder(input_folder, autoencoder)
     elif os.path.isfile(input_folder):
         infer_model_file(input_folder, autoencoder)
+

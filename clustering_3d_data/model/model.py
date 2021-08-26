@@ -18,13 +18,11 @@ class PCAutoEncoder(nn.Module):
         super(PCAutoEncoder, self).__init__()
 
         self.conv1 = nn.Conv1d(in_channels=point_dim, out_channels=64, kernel_size=1)
-        self.conv2 = nn.Conv1d(in_channels=64, out_channels=64, kernel_size=1)
-        self.conv3 = nn.Conv1d(in_channels=64, out_channels=64, kernel_size=1)
-        self.conv4 = nn.Conv1d(in_channels=64, out_channels=128, kernel_size=1)
-        self.conv5 = nn.Conv1d(in_channels=128, out_channels=1024, kernel_size=1)
+        self.conv2 = nn.Conv1d(in_channels=64, out_channels=128, kernel_size=1)
+        self.conv3 = nn.Conv1d(in_channels=128, out_channels=1024, kernel_size=1)
 
-        self.fc1 = nn.Linear(in_features=1024, out_features=1024)
-        self.fc2 = nn.Linear(in_features=1024, out_features=1024)
+        self.fc1 = nn.Linear(in_features=1024, out_features=256)
+        self.fc2 = nn.Linear(in_features=256, out_features=100)
         self.fc3 = nn.Linear(in_features=1024, out_features=num_points*3)
 
         #batch norm

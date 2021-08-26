@@ -15,6 +15,11 @@ import clustering
 import runmanager
 import json
 
+"""
+Run this "C:\Program Files (x86)\Microsoft Visual Studio\2019\Community\VC\Auxiliary\Build\vcvars64.bat"
+for solving the error in loading the chamfer distance
+"""
+
 if torch.cuda.is_available():
     from chamfer_distance.chamfer_distance_gpu import ChamferDistance # https://github.com/chrdiller/pyTorchChamferDistance
 else:
@@ -175,46 +180,46 @@ else:
 
 #######################################################
 # PERFORM CLUSTERING 
-print("Performing Clustering...")
-n_clusters = 2
-clusteringAlgo = clustering.get_clusteringAlgo("dbscan")
-clusteringAlgo.performClustering(best_latent_vector)
-clusteringAlgo.save()
+# print("Performing Clustering...")
+# n_clusters = 2
+# clusteringAlgo = clustering.get_clusteringAlgo("dbscan")
+# clusteringAlgo.performClustering(best_latent_vector)
+# clusteringAlgo.save()
 
-cluster_map = dict() # create a map of cluster id and filenames 
-for index, label in enumerate(clusteringAlgo.algo.labels_):
-    label = "Cluster-" + str(label)
-    cluster_map.setdefault(label, []).append(best_filenames[index])
+# cluster_map = dict() # create a map of cluster id and filenames 
+# for index, label in enumerate(clusteringAlgo.algo.labels_):
+#     label = "Cluster-" + str(label)
+#     cluster_map.setdefault(label, []).append(best_filenames[index])
 
-with open("saved_models/clustering.json", 'w') as clusterout:
-    json.dump(cluster_map, clusterout)
-    print("Clusters file generated")
+# with open("saved_models/clustering.json", 'w') as clusterout:
+#     json.dump(cluster_map, clusterout)
+#     print("Clusters file generated")
 
 
-print("Writing to Tensorboard")
-import open3d as o3d
-color = (0, 0, 0)
-for k, v in cluster_map.items():
-    batchedPoints = torch.Tensor()
-    batchedColors = torch.Tensor()
-    for i, filepath in enumerate(v):
-        pointCloud = o3d.io.read_point_cloud(filepath)
-        points = np.asarray(pointCloud.points)
+# print("Writing to Tensorboard")
+# import open3d as o3d
+# color = (0, 0, 0)
+# for k, v in cluster_map.items():
+#     batchedPoints = torch.Tensor()
+#     batchedColors = torch.Tensor()
+#     for i, filepath in enumerate(v):
+#         pointCloud = o3d.io.read_point_cloud(filepath)
+#         points = np.asarray(pointCloud.points)
 
-        points = pointutil.random_n_points(points, ip_options.num_points)
-        points = pointutil.normalize(points)
+#         points = pointutil.random_n_points(points, ip_options.num_points)
+#         points = pointutil.normalize(points)
 
-        colors = np.full(points.shape, color)
-        points = torch.as_tensor(points)#.unsqueeze(0)
-        colors = torch.as_tensor(colors)#.unsqueeze(0)
-        if i == 0:
-            batchedPoints = points.unsqueeze(0)
-            batchedColors = colors.unsqueeze(0)
-        else:
-            batchedPoints = torch.cat((batchedPoints, points.unsqueeze(0)))
-            batchedColors = torch.cat((batchedColors, colors.unsqueeze(0)))
-        #torch.stack(colors)
-    writer.add_mesh("Cluster-" + str(k), batchedPoints, batchedColors)
+#         colors = np.full(points.shape, color)
+#         points = torch.as_tensor(points)#.unsqueeze(0)
+#         colors = torch.as_tensor(colors)#.unsqueeze(0)
+#         if i == 0:
+#             batchedPoints = points.unsqueeze(0)
+#             batchedColors = colors.unsqueeze(0)
+#         else:
+#             batchedPoints = torch.cat((batchedPoints, points.unsqueeze(0)))
+#             batchedColors = torch.cat((batchedColors, colors.unsqueeze(0)))
+#         #torch.stack(colors)
+#     writer.add_mesh("Cluster-" + str(k), batchedPoints, batchedColors)
 
 print("the end.")
 
